@@ -282,6 +282,7 @@ const el = {
   gaussianControls: document.getElementById("gaussianControls"),
   gaussianOutput: document.getElementById("gaussianOutput"),
   benchSvg: document.getElementById("benchSvg"),
+  benchHud: document.getElementById("benchHud"),
   sequenceList: document.getElementById("sequenceList"),
   inspectorBody: document.getElementById("inspectorBody"),
   matrixPanel: document.getElementById("matrixPanel"),
@@ -513,6 +514,10 @@ function presetState(name) {
       span: 50,
       targetDistance: 100,
       targetHeight: 0,
+      targetDivergence: 1,
+      targetRayleigh: 1000,
+      targetSpotDistance: 100,
+      targetSpotRadius: 1,
       lastResult: null
     },
     selectedId: null,
@@ -743,6 +748,7 @@ function traceSystem(components = state.components) {
     }
 
     total = multiply(matrix, total);
+    const cumulativeMatrix = total;
 
     const after = rays.map((ray) => ({
       y: ray.vec[0],
@@ -756,6 +762,7 @@ function traceSystem(components = state.components) {
       zStart,
       zEnd: zStart + length,
       matrix,
+      cumulativeMatrix,
       before,
       after,
       screenHits,
@@ -1000,6 +1007,15 @@ function optimizerTargetInputs() {
   if (state.optimizer.target === "screenHeight") {
     return optimizerNumber("targetHeight", "Screen height");
   }
+  if (state.optimizer.target === "matchDivergence") {
+    return optimizerNumber("targetDivergence", "Divergence mrad");
+  }
+  if (state.optimizer.target === "rayleighRange") {
+    return optimizerNumber("targetRayleigh", "Rayleigh range");
+  }
+  if (state.optimizer.target === "targetSpotSize") {
+    return `${optimizerNumber("targetSpotDistance", "Target plane")}${optimizerNumber("targetSpotRadius", "Spot RMS")}`;
+  }
   return "";
 }
 
@@ -1012,6 +1028,7 @@ function renderInspector(trace) {
   const def = componentDefs[component.type];
   const data = trace.components.find((item) => item.component.id === component.id);
   const positionPanel = component.type === "space" ? "" : railPositionHtml(component, data);
+  const beamPanel = component.type === "screen" ? beamCheckHtml(data) : "";
   el.inspectorBody.innerHTML = `
     <div class="component-title">
       <strong>${escapeHtml(def.label)}</strong>
@@ -1028,6 +1045,7 @@ function renderInspector(trace) {
       <button type="button" data-action="delete">Delete</button>
     </div>
     ${positionPanel}
+    ${beamPanel}
     <div class="form-grid">
       ${def.fields.map((field) => fieldHtml("component", field, component.values[field.key])).join("")}
     </div>
@@ -1123,6 +1141,167 @@ function railPositionHtml(component, data) {
   `;
 }
 
+function beamCheckHtml(data, compact = false) {
+  const stats = beamCheckStats(data);
+  if (!stats) {
+    return `
+      <div class="beam-card">
+        <div class="rail-head">
+          <strong>Beam Check</strong>
+          <span>No live rays reach this plane.</span>
+        </div>
+      </div>
+    `;
+  }
+  const gaussian = stats.gaussian;
+  const items = [
+    ["Centroid", `${format(stats.centroid)} mm`],
+    ["RMS spot", `${format(stats.rms)} mm`],
+    ["Diameter", `${format(stats.diameter)} mm`],
+    ["Angle RMS", `${format(stats.angleRms * 1000)} mrad`]
+  ];
+  if (!compact) {
+    items.push(["Rays", `${stats.count}`]);
+  }
+  return `
+    <div class="beam-card">
+      <div class="rail-head">
+        <strong>Beam Check</strong>
+        <span>Plane z = ${format(data?.zStart || 0)} mm</span>
+      </div>
+      <div class="beam-metrics">
+        ${items.map(([label, value]) => `<div><span>${label}</span><strong>${value}</strong></div>`).join("")}
+      </div>
+      ${
+        gaussian?.ok
+          ? `<div class="beam-gaussian">
+              Gaussian radius ${format(gaussian.radius)} mm, waist ${format(gaussian.waistRadius)} mm ${format(gaussian.waistDistance)} mm from this plane, Rayleigh ${format(gaussian.outputRayleigh)} mm.
+            </div>`
+          : `<div class="beam-gaussian">Gaussian beam is unstable at this plane.</div>`
+      }
+    </div>
+  `;
+}
+
+function beamCheckStats(data) {
+  if (!data || !data.screenHits.length) return null;
+  const y = data.screenHits.map((hit) => hit.y);
+  const theta = data.screenHits.map((hit) => hit.theta);
+  const centroid = y.reduce((sum, value) => sum + value, 0) / y.length;
+  return {
+    count: y.length,
+    centroid,
+    rms: rms(y.map((value) => value - centroid)),
+    diameter: diameter(y),
+    angleRms: rms(theta),
+    gaussian: gaussianResult(data.cumulativeMatrix)
+  };
+}
+
+function renderBenchHud(trace, xScale) {
+  const component = selectedComponent();
+  if (!component) {
+    el.benchHud.classList.add("hidden");
+    el.benchHud.innerHTML = "";
+    return;
+  }
+  const data = trace.components.find((item) => item.component.id === component.id);
+  const def = componentDefs[component.type];
+  const centerZ = (data?.zStart || 0) + componentLength(component) / 2;
+  const xPct = Math.max(10, Math.min(90, (xScale(centerZ) / SVG_W) * 100));
+  const alignRight = xPct > 62;
+  el.benchHud.classList.toggle("hidden", false);
+  el.benchHud.classList.toggle("align-right", alignRight);
+  el.benchHud.style.left = `${xPct}%`;
+  el.benchHud.innerHTML = `
+    <div class="hud-title">
+      <div>
+        <strong>${escapeHtml(component.name)}</strong>
+        <span>${escapeHtml(def.short)} at z ${format(data?.zStart || 0)} mm</span>
+      </div>
+      <button type="button" class="icon-btn" data-hud-close title="Close quick inspector">x</button>
+    </div>
+    ${component.type === "screen" ? beamCheckHtml(data, true) : ""}
+    ${component.type === "space" ? "" : miniRailHtml(component, data)}
+    ${miniParamHtml(component)}
+  `;
+  bindBenchHud(component, def);
+}
+
+function miniRailHtml(component, data) {
+  const gaps = adjacentGapInfo(component.id);
+  return `
+    <div class="hud-rail">
+      <button type="button" data-nudge="-1" title="Nudge left">&lt;</button>
+      <label>
+        <span>z</span>
+        <input type="number" data-position="zStart" value="${formatInput(data?.zStart || 0)}" step="0.1" />
+      </label>
+      <button type="button" data-nudge="1" title="Nudge right">&gt;</button>
+      <label>
+        <span>before</span>
+        <input type="number" data-position="gapBefore" value="${formatInput(gaps.before)}" min="0" step="0.1" />
+      </label>
+      <label>
+        <span>after</span>
+        <input type="number" data-position="gapAfter" value="${formatInput(gaps.after)}" min="0" step="0.1" />
+      </label>
+    </div>
+  `;
+}
+
+function miniParamHtml(component) {
+  const fields = componentDefs[component.type].fields.slice(0, component.type === "screen" ? 1 : 3);
+  if (!fields.length) return "";
+  return `
+    <div class="hud-params">
+      ${fields
+        .map(
+          (field) => `
+            <label>
+              <span>${escapeHtml(field.label)}</span>
+              <input type="number" data-key="${field.key}" value="${formatInput(component.values[field.key])}" min="${field.min}" max="${field.max}" step="${field.step}" />
+            </label>
+          `
+        )
+        .join("")}
+    </div>
+  `;
+}
+
+function bindBenchHud(component, def) {
+  const close = el.benchHud.querySelector("[data-hud-close]");
+  close?.addEventListener("click", () => {
+    state.selectedId = null;
+    render();
+  });
+  el.benchHud.querySelectorAll("[data-nudge]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const multiplier = finite(button.dataset.nudge, 1);
+      const step = Math.max(0.001, finite(state.position.nudgeStep, 5));
+      slideComponentBy(component.id, multiplier * step);
+    });
+  });
+  el.benchHud.querySelectorAll("input[data-position]").forEach((input) => {
+    input.addEventListener("change", () => {
+      const key = input.dataset.position;
+      if (key === "zStart") {
+        setComponentStart(component.id, finite(input.value));
+      } else if (key === "gapBefore" || key === "gapAfter") {
+        setAdjacentGap(component.id, key === "gapBefore" ? "before" : "after", Math.max(0, finite(input.value)));
+        render();
+      }
+    });
+  });
+  el.benchHud.querySelectorAll("input[data-key]").forEach((input) => {
+    input.addEventListener("change", () => {
+      const field = def.fields.find((item) => item.key === input.dataset.key);
+      component.values[field.key] = coerceFieldValue(input.value, field);
+      render();
+    });
+  });
+}
+
 function renderBench(trace) {
   const zMin = Math.min(0, ...trace.rays.flatMap((ray) => ray.points.map((point) => point.z)));
   const zMaxRaw = Math.max(1, ...trace.rays.flatMap((ray) => ray.points.map((point) => point.z)), trace.totalLength);
@@ -1184,6 +1363,7 @@ function renderBench(trace) {
       event.preventDefault();
     });
   });
+  renderBenchHud(trace, xScale);
 }
 
 function renderGrid(xScale, yScale, zMin, zMax, yMax, margin) {
@@ -1270,7 +1450,17 @@ function renderComponentSvg(item, xScale, yScale) {
       <line class="component-shape" x1="${x}" y1="${yTop}" x2="${x}" y2="${yBottom}" stroke="${def.color}" />
     `;
   } else if (component.type === "screen") {
-    shape = `<line class="component-shape screen-line" x1="${x}" y1="${yTop}" x2="${x}" y2="${yBottom}" />`;
+    const stats = beamCheckStats(item);
+    const centroidY = stats ? yScale(stats.centroid) : yMid;
+    shape = `
+      <line class="component-shape screen-line" x1="${x}" y1="${yTop}" x2="${x}" y2="${yBottom}" />
+      ${
+        stats
+          ? `<circle cx="${x}" cy="${centroidY}" r="4" fill="#7ed889" />
+             <text class="component-label screen-readout" x="${x + 8}" y="${Math.max(18, centroidY - 8)}" text-anchor="start">RMS ${format(stats.rms)} mm | y ${format(stats.centroid)} mm</text>`
+          : ""
+      }
+    `;
   } else if (component.type === "curvedMirror") {
     const bow = component.values.radius >= 0 ? -14 : 14;
     shape = `<path class="component-shape" stroke="${def.color}" d="M ${x} ${yTop} Q ${x + bow} ${yMid} ${x} ${yBottom}" />`;
@@ -1288,7 +1478,7 @@ function renderComponentSvg(item, xScale, yScale) {
   const hitWidth = Math.max(18, Math.abs(x2 - x1) + 18);
   return `
     <g class="component-hit ${selected}" data-component-id="${component.id}" data-component-type="${component.type}">
-      <rect x="${x - hitWidth / 2}" y="${Math.min(yTop, yBottom) - 22}" width="${hitWidth}" height="${Math.abs(yBottom - yTop) + 64}" fill="transparent" />
+      <rect class="component-drag-target" x="${x - hitWidth / 2}" y="${Math.min(yTop, yBottom) - 22}" width="${hitWidth}" height="${Math.abs(yBottom - yTop) + 64}" fill="transparent" pointer-events="all" />
       ${shape}
       <text class="component-label" x="${x}" y="${SVG_H - 38}">${label.slice(0, 18)}</text>
     </g>
@@ -1565,7 +1755,7 @@ function gaussianResult(matrix) {
   const waistDistance = -qOut.re;
   const waistQ = { re: 0, im: qOut.im };
   const waistRadius = Math.sqrt((wavelengthMm * Math.max(waistQ.im, 0)) / Math.PI);
-  return { ok: true, radius, wavefront, waistDistance, waistRadius };
+  return { ok: true, radius, wavefront, waistDistance, waistRadius, outputRayleigh: Math.max(0, qOut.im) };
 }
 
 function centered(values) {
@@ -1723,7 +1913,10 @@ function optimizerTargets() {
     { value: "screenSpot", label: "Screen Spot", meta: "smallest RMS" },
     { value: "collimate", label: "Collimate", meta: "lowest angle RMS" },
     { value: "focusDistance", label: "Focus Plane", meta: "at distance" },
-    { value: "screenHeight", label: "Screen Height", meta: "match target" }
+    { value: "screenHeight", label: "Screen Height", meta: "match target" },
+    { value: "matchDivergence", label: "Divergence", meta: "match mrad" },
+    { value: "targetSpotSize", label: "Spot At Plane", meta: "match RMS" },
+    { value: "rayleighRange", label: "Rayleigh", meta: "Gaussian q" }
   ];
 }
 
@@ -1848,9 +2041,24 @@ function optimizerObjective(trace) {
   if (state.optimizer.target === "collimate") {
     return rms(liveRays.map((ray) => ray.vec[1]));
   }
+  if (state.optimizer.target === "matchDivergence") {
+    const target = Math.max(0, finite(state.optimizer.targetDivergence)) / 1000;
+    return Math.abs(rms(liveRays.map((ray) => ray.vec[1])) - target);
+  }
   if (state.optimizer.target === "focusDistance") {
     const distance = finite(state.optimizer.targetDistance);
     return rms(centered(liveRays.map((ray) => ray.vec[0] + distance * ray.vec[1])));
+  }
+  if (state.optimizer.target === "targetSpotSize") {
+    const distance = finite(state.optimizer.targetSpotDistance);
+    const target = Math.max(0, finite(state.optimizer.targetSpotRadius));
+    const yAtTarget = liveRays.map((ray) => ray.vec[0] + distance * ray.vec[1]);
+    return Math.abs(rms(centered(yAtTarget)) - target);
+  }
+  if (state.optimizer.target === "rayleighRange") {
+    const result = gaussianResult(trace.matrix);
+    if (!result.ok || !Number.isFinite(result.outputRayleigh)) return Infinity;
+    return Math.abs(result.outputRayleigh - Math.max(0, finite(state.optimizer.targetRayleigh)));
   }
   const lastScreen = [...trace.components].reverse().find((item) => item.component.type === "screen");
   const y = lastScreen?.screenHits.map((hit) => hit.y) || liveRays.map((ray) => ray.vec[0]);
@@ -1868,7 +2076,7 @@ function optimizerMessage(message, kind) {
 
 function formatScore(score) {
   if (!Number.isFinite(score)) return "blocked";
-  const unit = state.optimizer.target === "collimate" ? " rad" : " mm";
+  const unit = state.optimizer.target === "collimate" || state.optimizer.target === "matchDivergence" ? " rad" : " mm";
   return `${format(score)}${unit}`;
 }
 

@@ -397,6 +397,91 @@ textarea {
   position: relative;
 }
 
+.bench-hud {
+  position: absolute;
+  top: 12px;
+  width: min(330px, calc(100% - 24px));
+  max-height: calc(100% - 24px);
+  overflow: auto;
+  transform: translateX(10px);
+  z-index: 6;
+  padding: 10px;
+  border: 1px solid rgba(67, 199, 214, 0.36);
+  border-radius: var(--radius);
+  background: rgba(17, 24, 32, 0.96);
+  box-shadow: 0 16px 34px rgba(0, 0, 0, 0.34);
+  backdrop-filter: blur(10px);
+}
+
+.bench-hud.align-right {
+  transform: translateX(calc(-100% - 10px));
+}
+
+.hud-title {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 9px;
+}
+
+.hud-title strong {
+  display: block;
+  font-size: 13px;
+  line-height: 1.2;
+}
+
+.hud-title span {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.25;
+}
+
+.hud-rail {
+  display: grid;
+  grid-template-columns: 34px 1fr 34px;
+  gap: 7px;
+  margin-top: 8px;
+}
+
+.hud-rail label:nth-of-type(n + 2) {
+  grid-column: span 1;
+}
+
+.hud-rail button {
+  min-height: 34px;
+  padding: 0;
+  font-weight: 700;
+}
+
+.hud-rail label,
+.hud-params label {
+  display: grid;
+  gap: 4px;
+}
+
+.hud-rail span,
+.hud-params span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.hud-params {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+  margin-top: 8px;
+}
+
+.hud-params input,
+.hud-rail input {
+  min-height: 30px;
+  padding: 4px 6px;
+  font-size: 12px;
+}
+
 #benchSvg {
   width: 100%;
   height: 100%;
@@ -665,6 +750,52 @@ textarea {
   color: #dce8ef;
 }
 
+.beam-card {
+  margin: 12px 0;
+  padding: 10px;
+  border: 1px solid rgba(126, 216, 137, 0.28);
+  border-radius: var(--radius);
+  background: rgba(21, 28, 36, 0.92);
+}
+
+.bench-hud .beam-card {
+  margin: 8px 0;
+}
+
+.beam-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+  margin-top: 9px;
+}
+
+.beam-metrics div {
+  min-height: 48px;
+  padding: 8px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+  background: #111820;
+  display: grid;
+  align-content: center;
+  gap: 4px;
+}
+
+.beam-metrics span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.beam-metrics strong {
+  font-size: 13px;
+}
+
+.beam-gaussian {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
 .analysis-strip {
   display: grid;
   grid-template-columns: 1.1fr 1fr 1.05fr;
@@ -814,6 +945,7 @@ textarea {
 
 .component-hit {
   cursor: pointer;
+  touch-action: none;
 }
 
 .component-hit:not([data-component-type="space"]) {
@@ -827,6 +959,10 @@ textarea {
 body.dragging-bench {
   cursor: grabbing;
   user-select: none;
+}
+
+.component-drag-target {
+  pointer-events: all;
 }
 
 .component-shape {
@@ -845,6 +981,11 @@ body.dragging-bench {
   font-size: 11px;
   text-anchor: middle;
   pointer-events: none;
+}
+
+.screen-readout {
+  fill: #bcefc3;
+  text-anchor: start;
 }
 
 .component-selected .component-shape,
