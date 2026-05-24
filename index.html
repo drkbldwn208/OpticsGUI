@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Paraxial Optics Testbench</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="brand">
+          <div class="mark" aria-hidden="true"></div>
+          <div>
+            <h1>Paraxial Optics Testbench</h1>
+            <p id="systemSummary">Ready</p>
+          </div>
+        </div>
+        <div class="top-actions">
+          <button class="ghost" type="button" data-preset="camera">Camera Relay</button>
+          <button class="ghost" type="button" data-preset="fourf">4f Relay</button>
+          <button class="ghost" type="button" data-preset="expander">Beam Expander</button>
+          <button class="ghost" type="button" id="newBenchBtn">New</button>
+          <button class="primary" type="button" id="exportBtn">Export</button>
+          <label class="file-action">
+            Import
+            <input id="importInput" type="file" accept="application/json" />
+          </label>
+        </div>
+      </header>
+
+      <main class="workspace">
+        <aside class="palette" aria-label="Optical component palette">
+          <section class="panel-section">
+            <div class="section-head">
+              <h2>Components</h2>
+              <button class="icon-btn" type="button" id="clearBenchBtn" title="Clear bench">x</button>
+            </div>
+            <div id="componentLibrary" class="library"></div>
+          </section>
+
+          <section class="panel-section source-panel">
+            <div class="section-head">
+              <h2>Source</h2>
+              <button class="icon-btn" type="button" id="centerRaysBtn" title="Center source">0</button>
+            </div>
+            <div id="sourceControls" class="form-grid"></div>
+          </section>
+        </aside>
+
+        <section class="bench-area" aria-label="Interactive ray bench">
+          <div class="bench-toolbar">
+            <div>
+              <h2>Ray Bench</h2>
+              <p id="benchHint">Live rail coordinates, ray trace, and paraxial transfer model.</p>
+            </div>
+            <div class="view-switches">
+              <label><input id="showMatricesToggle" type="checkbox" checked /> Matrices</label>
+              <label><input id="showGaussianToggle" type="checkbox" checked /> Gaussian</label>
+              <label><input id="showGridToggle" type="checkbox" checked /> Grid</label>
+            </div>
+          </div>
+
+          <div class="bench-frame">
+            <svg id="benchSvg" role="img" aria-label="Paraxial ray diagram"></svg>
+          </div>
+
+          <div class="sequence-wrap">
+            <div class="sequence-label">Sequence</div>
+            <div id="sequenceList" class="sequence-list"></div>
+          </div>
+        </section>
+
+        <aside class="inspector" aria-label="Selected component inspector">
+          <section class="panel-section">
+            <div class="section-head">
+              <h2>Inspector</h2>
+              <button class="icon-btn" type="button" id="duplicateBtn" title="Duplicate selected component">+</button>
+            </div>
+            <div id="inspectorBody" class="inspector-body"></div>
+          </section>
+
+          <section class="panel-section optimizer-panel">
+            <div class="section-head">
+              <h2>Design Solver</h2>
+              <button class="icon-btn" type="button" id="runOptimizerBtn" title="Run optimization">Run</button>
+            </div>
+            <div id="optimizerControls" class="form-grid"></div>
+            <div id="optimizerResult" class="solver-result">Choose a variable and target.</div>
+          </section>
+
+          <section class="panel-section fiber-panel">
+            <div class="section-head">
+              <h2>Fiber Asphere</h2>
+              <button class="icon-btn" type="button" id="solveFiberFBtn" title="Set focal length from target beam">f</button>
+            </div>
+            <div id="fiberControls" class="form-grid"></div>
+            <div class="fiber-actions">
+              <button class="ghost" type="button" id="syncGaussianBtn">Use Gaussian</button>
+              <button class="primary" type="button" id="applyFiberBtn">Insert</button>
+            </div>
+            <div id="fiberResult" class="solver-result">Enter fiber and asphere values.</div>
+          </section>
+        </aside>
+      </main>
+
+      <section class="analysis-strip" aria-label="System analysis">
+        <article class="analysis-panel matrix-panel" id="matrixPanel">
+          <div class="analysis-head">
+            <h2>ABCD Matrix</h2>
+            <button class="ghost compact" type="button" id="copyMatrixBtn">Copy</button>
+          </div>
+          <div id="matrixOutput"></div>
+        </article>
+
+        <article class="analysis-panel">
+          <div class="analysis-head">
+            <h2>System Metrics</h2>
+          </div>
+          <div id="metricsOutput" class="metrics-grid"></div>
+        </article>
+
+        <article class="analysis-panel gaussian-panel" id="gaussianPanel">
+          <div class="analysis-head">
+            <h2>Gaussian Beam</h2>
+          </div>
+          <div id="gaussianControls" class="form-grid compact-grid"></div>
+          <div id="gaussianOutput" class="gaussian-output"></div>
+        </article>
+      </section>
+    </div>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
